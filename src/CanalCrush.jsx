@@ -284,6 +284,43 @@ function applyGravity(board) {
 function cloneBoard(b) { return b.map(r => [...r]); }
 function getPiece(id) { return PIECES.find(p => p.id === id) || PIECES[0]; }
 
+// ─── HINT LOGIC ───
+function findBestMove(board, tideRow, target, collected) {
+  const moves = [];
+  const dirs = [[0,1],[1,0]]; // right, down — covers all swaps (each pair once)
+  for (let r = 0; r < tideRow; r++) {
+    for (let c = 0; c < COLS; c++) {
+      for (const [dr, dc] of dirs) {
+        const r2 = r + dr, c2 = c + dc;
+        if (r2 >= tideRow || c2 >= COLS) continue;
+        const test = cloneBoard(board);
+        [test[r][c], test[r2][c2]] = [test[r2][c2], test[r][c]];
+        const matches = findAllMatches(test);
+        if (matches.length === 0) continue;
+        // Score the move: prioritize pieces we still need for the level target
+        const counts = {};
+        matches.forEach(([mr, mc]) => {
+          const id = test[mr]?.[mc];
+          if (id) counts[id] = (counts[id] || 0) + 1;
+        });
+        let score = matches.length;
+        // Bonus for matching pieces we still need
+        for (const [id, cnt] of Object.entries(counts)) {
+          const needed = (target[id] || 0) - (collected[id] || 0);
+          if (needed > 0) score += Math.min(cnt, needed) * 3;
+        }
+        // Bonus for power-up potential (4+ matches)
+        if (matches.length >= 5) score += 10;
+        else if (matches.length >= 4) score += 5;
+        moves.push({ r1: r, c1: c, r2: r2, c2: c2, score });
+      }
+    }
+  }
+  if (moves.length === 0) return null;
+  moves.sort((a, b) => b.score - a.score);
+  return moves[0];
+}
+
 // ─── BACKGROUND ───
 function CanalBackground() {
   // Deterministic house data — no Math.random() so it's stable across renders
@@ -499,6 +536,7 @@ export default function CanalCrush() {
   const [comboText, setComboText] = useState(null);
   const [powerUpCells, setPowerUpCells] = useState(new Set());
   const [swapAnim, setSwapAnim] = useState(null); // { "r,c": animName }
+  const [hintCells, setHintCells] = useState(null); // { r1, c1, r2, c2 }
   const audioRef = useRef(null);
   const boardElRef = useRef(null);
   const touchStartRef = useRef(null);
@@ -573,6 +611,7 @@ export default function CanalCrush() {
     setComboText(null);
     setPowerUpCells(new Set());
     setSwapAnim(null);
+    setHintCells(null);
     setScreen("game");
     audioRef.current?.startBg();
   }, []);
@@ -734,6 +773,16 @@ export default function CanalCrush() {
 
   const handleToggleMute = async () => { await ensureAudio(); setMuted(audioRef.current?.toggleMute()); };
   const goMenu = () => { audioRef.current?.stopBg(); setScreen("menu"); };
+
+  const handleHint = useCallback(() => {
+    if (animating || screen !== "game" || movesLeft <= 1 || hintCells) return;
+    const move = findBestMove(board, tideRow, level.target, collected);
+    if (!move) return;
+    setMovesLeft(m => m - 1);
+    setHintCells(move);
+    setTimeout(() => setHintCells(null), 2000);
+  }, [animating, screen, movesLeft, board, tideRow, level, collected, hintCells]);
+
   const tileSize = "clamp(38px, 11.5vw, 54px)";
 
   // ─── MENU ───
@@ -772,7 +821,8 @@ export default function CanalCrush() {
           {totalScore > 0 && <p style={{ ...S.totalScore, color: "#8aa4c0", fontSize: "0.82rem" }}>This run: {totalScore}</p>}
           <div style={{ fontSize: "0.7rem", color: "#5a7a9a", textAlign: "center", maxWidth: 320 }}>
             Match 4 in a row → <b>Bicycle Bell</b> (clears row/column)<br/>
-            Match 5+ in a row → <b>King's Day Bomb</b> (clears 3×3)
+            Match 5+ in a row → <b>King's Day Bomb</b> (clears 3×3)<br/>
+            💡 <b>Hint</b> → shows best move (costs 1 move)
           </div>
         </div>
       </div>
@@ -832,6 +882,7 @@ export default function CanalCrush() {
             <div style={{ fontSize: "0.7rem", color: "#8aa4c0" }}>{score} pts</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={handleHint} style={{ ...S.hintBtn, opacity: (animating || movesLeft <= 1 || hintCells) ? 0.35 : 1 }} disabled={animating || movesLeft <= 1 || !!hintCells}>💡</button>
             <button onClick={handleToggleMute} style={S.muteBtnSmall}>{muted ? "🔇" : "🔊"}</button>
             <div style={{ textAlign: "center" }}>
               <div style={{ color: movesLeft <= 5 ? "#ef5350" : "#ffd54f", fontWeight: 800, fontSize: "1.4rem", lineHeight: 1 }}>{movesLeft}</div>
@@ -874,6 +925,7 @@ export default function CanalCrush() {
               const isFlooded = r >= tideRow;
               const isShaking = shakeCell === `${r},${c}`;
               const isPowerUp = powerUpCells.has(`${r},${c}`);
+              const isHint = hintCells && ((hintCells.r1 === r && hintCells.c1 === c) || (hintCells.r2 === r && hintCells.c2 === c));
               const swapDir = swapAnim?.[`${r},${c}`];
               const piece = cell ? getPiece(cell) : null;
               return (
@@ -890,8 +942,10 @@ export default function CanalCrush() {
                     transition: swapDir ? "none" : "all 0.2s cubic-bezier(0.4,0,0.2,1)",
                     background: isFlooded ? "linear-gradient(180deg, #1565a0, #2196c8)"
                       : isPowerUp ? "rgba(255,213,79,0.3)"
+                      : isHint ? "rgba(116,185,255,0.25)"
                       : isSelected ? "rgba(244,166,35,0.2)" : "rgba(30,58,95,0.6)",
                     boxShadow: isPowerUp ? "0 0 20px rgba(255,213,79,0.5), 0 0 0 2px #ffd54f"
+                      : isHint ? "0 0 0 2px #74b9ff, 0 0 18px rgba(116,185,255,0.5)"
                       : isSelected ? "0 0 0 2px #f4a623, 0 0 16px rgba(244,166,35,0.35)"
                       : isMatched ? `0 0 20px ${piece?.color||"#fff"}80`
                       : "inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.2)",
@@ -899,7 +953,8 @@ export default function CanalCrush() {
                     opacity: isMatched ? 0 : isFlooded ? 0.55 : 1,
                     animation: isShaking ? "canalShake 0.35s ease"
                       : swapDir ? `${swapDir} 0.16s cubic-bezier(0.4,0,0.2,1)`
-                      : isPowerUp ? "powerGlow 0.5s ease" : undefined,
+                      : isPowerUp ? "powerGlow 0.5s ease"
+                      : isHint ? "hintPulse 0.6s ease-in-out infinite" : undefined,
                   }}>
                   {isFlooded ? <span style={{ fontSize: "clamp(14px,4vw,20px)", opacity: 0.7 }}>🌊</span>
                     : cell && <PieceSVG id={cell} size={Math.min(window.innerWidth * 0.07, 32)} />}
@@ -922,6 +977,7 @@ export default function CanalCrush() {
         @keyframes comboIn { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.5)} 50%{opacity:1;transform:translate(-50%,-50%) scale(1.3)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1) translateY(-30px)} }
         @keyframes resultIn { from{opacity:0;transform:translateY(30px) scale(0.95)} to{opacity:1;transform:translateY(0) scale(1)} }
         @keyframes powerGlow { 0%{box-shadow:0 0 0 rgba(255,213,79,0)} 50%{box-shadow:0 0 30px rgba(255,213,79,0.7)} 100%{box-shadow:0 0 0 rgba(255,213,79,0)} }
+        @keyframes hintPulse { 0%,100%{transform:scale(1);box-shadow:0 0 0 2px #74b9ff,0 0 18px rgba(116,185,255,0.5)} 50%{transform:scale(1.08);box-shadow:0 0 0 3px #74b9ff,0 0 24px rgba(116,185,255,0.7)} }
         @keyframes slideFromLeft   { from{transform:translateX(calc(-100% - 3px))} to{transform:none} }
         @keyframes slideFromRight  { from{transform:translateX(calc(100% + 3px))}  to{transform:none} }
         @keyframes slideFromTop    { from{transform:translateY(calc(-100% - 3px))} to{transform:none} }
@@ -939,6 +995,7 @@ const S = {
   subtitle: { margin: "4px 0 0", color: "#8aa4c0", fontSize: "0.9rem", letterSpacing: "0.5px" },
   muteBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: "6px 16px", color: "#8aa4c0", fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" },
   muteBtnSmall: { background: "none", border: "none", cursor: "pointer", fontSize: "1.1rem", padding: 4 },
+  hintBtn: { background: "rgba(116,185,255,0.12)", border: "1px solid rgba(116,185,255,0.25)", borderRadius: 8, cursor: "pointer", fontSize: "1.1rem", padding: "4px 6px", lineHeight: 1, transition: "opacity 0.2s" },
   levelGrid: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, width: "100%", padding: "0 8px" },
   levelBtn: { background: "rgba(20,40,70,0.7)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "16px 12px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer", color: "#f0e6d3", transition: "all 0.2s ease", fontFamily: "inherit" },
   levelNumBadge: { width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.95rem", fontWeight: 700, color: "#fff", marginBottom: 4, boxShadow: "0 2px 8px rgba(244,166,35,0.3)" },
