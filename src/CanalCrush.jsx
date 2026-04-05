@@ -483,13 +483,16 @@ export default function CanalCrush() {
   const [movesLeft, setMovesLeft] = useState(0);
   const [collected, setCollected] = useState({});
   const [score, setScore] = useState(0);
-  const [totalScore, setTotalScore] = useState(0);
+  const [totalScore, setTotalScore] = useState(() => parseInt(localStorage.getItem("canalCrushTotalScore") || "0", 10));
   const [highScore, setHighScore] = useState(() => parseInt(localStorage.getItem("canalCrushHighScore") || "0", 10));
   const [animating, setAnimating] = useState(false);
   const [matchedCells, setMatchedCells] = useState(new Set());
   const [tideRow, setTideRow] = useState(ROWS);
   const [movesSinceTide, setMovesSinceTide] = useState(0);
-  const [completedLevels, setCompletedLevels] = useState(new Set());
+  const [completedLevels, setCompletedLevels] = useState(() => {
+    try { const s = localStorage.getItem("canalCrushCompleted"); return s ? new Set(JSON.parse(s)) : new Set(); }
+    catch { return new Set(); }
+  });
   const [shakeCell, setShakeCell] = useState(null);
   const [particles, setParticles] = useState([]);
   const [muted, setMuted] = useState(false);
@@ -508,13 +511,23 @@ export default function CanalCrush() {
   useEffect(() => { movesLeftRef.current = movesLeft; }, [movesLeft]);
   useEffect(() => { scoreRef.current = score; }, [score]);
 
-  // Persist high score to localStorage whenever totalScore improves
+  // Persist scores to localStorage
   useEffect(() => {
-    if (totalScore > 0 && totalScore > highScore) {
-      setHighScore(totalScore);
-      localStorage.setItem("canalCrushHighScore", String(totalScore));
+    if (totalScore > 0) {
+      localStorage.setItem("canalCrushTotalScore", String(totalScore));
+      if (totalScore > highScore) {
+        setHighScore(totalScore);
+        localStorage.setItem("canalCrushHighScore", String(totalScore));
+      }
     }
   }, [totalScore]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist completed levels
+  useEffect(() => {
+    if (completedLevels.size > 0) {
+      localStorage.setItem("canalCrushCompleted", JSON.stringify([...completedLevels]));
+    }
+  }, [completedLevels]);
 
   const level = LEVELS[levelIdx];
 
@@ -920,8 +933,8 @@ export default function CanalCrush() {
 
 // ─── STYLES ───
 const S = {
-  container: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 8px 24px", fontFamily: "'DM Sans', sans-serif", color: "#f0e6d3", position: "relative", overflow: "hidden" },
-  menuInner: { position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 18, maxWidth: 480, width: "100%", paddingTop: 20 },
+  container: { height: "100dvh", maxHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", padding: "env(safe-area-inset-top, 10px) 8px env(safe-area-inset-bottom, 8px)", fontFamily: "'DM Sans', sans-serif", color: "#f0e6d3", position: "relative", overflow: "hidden" },
+  menuInner: { position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 18, maxWidth: 480, width: "100%", paddingTop: 10, flex: 1, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", paddingBottom: 16 },
   title: { fontSize: "2.6rem", fontFamily: "'Fredoka', sans-serif", fontWeight: 700, margin: 0, background: "linear-gradient(135deg, #f4a623 0%, #ffd54f 50%, #f39c12 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: "-1px" },
   subtitle: { margin: "4px 0 0", color: "#8aa4c0", fontSize: "0.9rem", letterSpacing: "0.5px" },
   muteBtn: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: "6px 16px", color: "#8aa4c0", fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" },

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0d1b3e"/>
+  <!-- Canal water -->
+  <rect x="0" y="380" width="512" height="132" rx="0" fill="#1a4a70"/>
+  <line x1="40" y1="420" x2="180" y2="420" stroke="#74b9ff" stroke-width="2" opacity="0.3"/>
+  <line x1="250" y1="440" x2="460" y2="440" stroke="#74b9ff" stroke-width="2" opacity="0.25"/>
+  <!-- Golden horizon -->
+  <rect x="0" y="370" width="512" height="14" fill="#c47b2a" opacity="0.5"/>
+  <!-- Tulip -->
+  <g transform="translate(256,200) scale(4)">
+    <line x1="0" y1="20" x2="0" y2="0" stroke="#27ae60" stroke-width="3" stroke-linecap="round"/>
+    <ellipse cx="-6" cy="10" rx="4" ry="6" fill="#27ae60" opacity="0.7" transform="rotate(-30 -6 10)"/>
+    <ellipse cx="6" cy="10" rx="4" ry="6" fill="#27ae60" opacity="0.7" transform="rotate(30 6 10)"/>
+    <path d="M-10 0 Q-8 -14 0 -16 Q8 -14 10 0 Q5 4 0 4 Q-5 4 -10 0Z" fill="#e84393"/>
+    <path d="M-5 -2 Q-3 -12 0 -14 Q3 -12 5 -2 Q2 1 0 1 Q-2 1 -5 -2Z" fill="#fd79a8"/>
+    <circle cx="0" cy="-6" r="1.5" fill="#fff" opacity="0.6"/>
+  </g>
+  <!-- Stars -->
+  <circle cx="80" cy="60" r="4" fill="#fff" opacity="0.5"/>
+  <circle cx="420" cy="90" r="3" fill="#fff" opacity="0.4"/>
+  <circle cx="150" cy="120" r="2.5" fill="#fff" opacity="0.35"/>
+  <circle cx="380" cy="50" r="3.5" fill="#fff" opacity="0.45"/>
+</svg>
